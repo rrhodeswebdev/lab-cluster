@@ -1,0 +1,14 @@
+# Upstream docker-compose shares one .local-storage volume between the server
+# and the worker; the worker reads files the server wrote (imports, exports,
+# attachments). ponytail: ReadWriteOnce is fine on a single node, both pods
+# land together. Move to S3 (STORAGE_TYPE=s3) before adding a second node.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: twenty-local-storage
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi

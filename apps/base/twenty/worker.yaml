@@ -1,0 +1,70 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: twenty-worker
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: twenty-worker
+  template:
+    metadata:
+      labels:
+        app: twenty-worker
+    spec:
+      initContainers:
+        - name: wait-for-db
+          image: postgres:16
+          command:
+            - sh
+            - -c
+            - until pg_isready -h twenty-postgres -U twenty -q; do echo "waiting for postgres..."; sleep 2; done
+      containers:
+        - name: worker
+          image: twentycrm/twenty:v2.37.0
+          command: ["yarn", "worker:prod"]
+          envFrom:
+            - configMapRef:
+                name: twenty-env
+          env:
+            # Both already run on the server; without these the worker races the
+            # server on migrations and registers a duplicate set of cron jobs.
+            - name: DISABLE_DB_MIGRATIONS
+              value: "true"
+            - name: DISABLE_CRON_JOBS_REGISTRATION
+              value: "true"
+            - name: REDIS_URL
+              value: redis://twenty-redis:6379
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: twenty
+                  key: POSTGRES_PASSWORD
+            - name: PG_DATABASE_URL
+              value: postgres://twenty:$(POSTGRES_PASSWORD)@twenty-postgres:5432/twenty
+            - name: APP_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: twenty
+                  key: APP_SECRET
+            - name: ENCRYPTION_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: twenty
+                  key: ENCRYPTION_KEY
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: 2000m
+              memory: 2Gi
+          volumeMounts:
+            - name: local-storage
+              mountPath: /app/packages/twenty-server/.local-storage
+      volumes:
+        - name: local-storage
+          persistentVolumeClaim:
+            claimName: twenty-local-storage

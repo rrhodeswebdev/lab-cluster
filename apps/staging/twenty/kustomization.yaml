@@ -1,0 +1,20 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: twenty
+resources:
+  - ../../base/twenty
+configMapGenerator:
+  - name: twenty-env
+    behavior: merge
+    literals:
+      # Plain http while this is local-only. Once Cloudflare proxies the host it
+      # terminates TLS at the edge, so switch this to https:// then.
+      - SERVER_URL=http://crm-staging.graced.studio
+patches:
+  - target:
+      kind: Ingress
+      name: twenty
+    patch: |
+      - op: replace
+        path: /spec/rules/0/host
+        value: crm-staging.graced.studio
